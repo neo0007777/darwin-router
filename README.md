@@ -4,7 +4,7 @@
 
 A **self-improving semantic router**, built in one day.
 
-![Darwin Router poster](assets/poster_pro_a.png)
+[![Darwin Router: a router that learns while it routes. Reported hackathon results: holdout routing accuracy rose from 75% to 85%, while estimated cost per request fell by 50%.](assets/darwin-router-hero.png)](assets/darwin-router-overview.mp4)
 
 Most LLM routers need training runs to adapt, but models and traffic change
 faster than retraining cycles. Darwin is **training-free**: routing decisions
@@ -12,8 +12,22 @@ are kNN lookups over a vector index of labelled exemplars, so adaptation is
 literally an index write. Misroutes detected by an LLM-as-judge are written
 back into the index — the router improves online, live, with no training loop.
 
-▶️ **[2-minute demo video](assets/demo_video.mp4)** — narrated tour of the live
-dashboard, recorded on hackathon day.
+[![Animated preview: a text request passes through SIE embeddings and a cosine kNN exemplar index to the simple or reasoning model. Click to watch the full 60-second overview.](assets/darwin-router-preview.gif)](assets/darwin-router-overview.mp4)
+
+▶ **[Watch the 60-second overview](assets/darwin-router-overview.mp4)** ·
+[Read the visual transcript](assets/darwin-router-overview.md)
+
+**Route → judge → improve.** An animated walkthrough of the routing policy,
+guarded writeback, and reported results, with footage from the original
+dashboard. Original soundtrack; designed to work with sound off.
+
+<details>
+<summary>Original hackathon demo</summary>
+
+[Watch the original narrated dashboard tour (1:44)](assets/demo_video.mp4),
+recorded on 14 Aug 2026.
+
+</details>
 
 ## Results (one day, cold start to prize)
 
@@ -117,7 +131,8 @@ estimate, and the all-qwen-max counterfactual cost.
 | `scripts/curate_hard.py` | operator curation for judge noise on hard families |
 | `dashboard/index.html` | live dashboard (Chart.js, polls `/stats` every 2s) |
 | `data/holdout.jsonl` | hand-written eval set — never enters the index |
-| `assets/` | demo video, Qwen-generated poster, HappyHorse concept video |
+| `assets/` | README hero, animated overview and transcript, original hackathon media |
+| `media-source/` | reproducible motion renderer, original score, and artwork prompt |
 
 No database, no vector store, no training infra: numpy + JSONL files.
 

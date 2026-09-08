@@ -1,0 +1,14 @@
+Use case: ads-marketing.
+Asset type: premium wide 16:9 GitHub README hero image for the open-source project Darwin Router.
+Primary request: Create a striking, exceptionally well art-directed launch graphic for a self-improving semantic LLM router. It learns routing decisions by adding judged examples to a vector index, without retraining. Make this feel like the cover of an excellent contemporary computational-design publication, tasteful and technically sophisticated.
+Composition: widescreen 16:9. A very dark ink-black canvas (#080d10), generous negative space, strict editorial grid. Huge crisp warm-white grotesk typography on the left, sculptural data-routing artwork on the right. Keep all essential elements inside a 6% safe margin. Upper left small restrained uppercase eyebrow; left middle enormous title over two lines; concise subheading beneath. Bottom horizontal fine-line separated band for two factual results. Strong thumbnail readability.
+Artwork: a beautiful translucent smoky-glass triangular branching manifold on the right, three-dimensional optical sculpture. A precise thin stream of white data dots enters a small central glass junction then branches into two sweeping luminous fibre paths, one electric mint (#92f5bc) and one periwinkle blue (#8c9fff). A graceful thin loop of warm white light returns into the junction, suggesting learning by feedback. Tiny discrete light points within glass evoke labelled exemplars. Physically plausible refraction, subtle caustics, black polished studio, soft rim light. This is abstract conceptual artwork, not an architecture diagram; no chips, robot heads, brains, globes, DNA or generic cyberpunk circuitry. Keep the glass form disciplined and sculptural. Mint is the primary accent. No interface chrome.
+Text EXACTLY (spell accurately, do not add extra text):
+Small eyebrow: "TRAINING-FREE SEMANTIC ROUTING"
+Large title: "Darwin" on one line and "Router" on the next.
+Subheading over two lines: "A router that learns" and "while it routes."
+Bottom left metric: "75% → 85%" and small label "holdout routing accuracy"
+Bottom middle metric: "50% lower" and small label "estimated cost per request"
+Fine small footer along bottom: "Reported hackathon results · 40-query holdout · 14 Aug 2026"
+Typography: flawless Swiss-style sans serif, title heavy with tight optical spacing, smaller text regular and well spaced, no text overlap. Do not put text over the sculpture.
+Constraints: highly polished finished hero, clean confident layout, no watermark, no invented sponsor logos, no spurious tiny decorative copy. Numbers are reported historical results, not guarantees.
