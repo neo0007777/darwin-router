@@ -147,7 +147,3 @@ Every response contains `x_darwin` headers exposing routing classification, conf
 
 ---
 
-## Attribution & License
-
-- Original Darwin Router by Hasham Ul Haq & team ([hashkanna/darwin-router](https://github.com/hashkanna/darwin-router)), first prize at Superlinked × Qwen Hackathon (August 2024).
-- Extended with deterministic program verification, disjoint evaluation methodology, boundary probing, and automated benchmark verification by Shiva Sharma.
