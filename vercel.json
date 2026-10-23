@@ -1,9 +1,12 @@
 {
-  "version": 2,
+  "framework": null,
+  "buildCommand": null,
+  "outputDirectory": null,
+  "cleanUrls": true,
   "rewrites": [
     { "source": "/api/benchmark", "destination": "/assets/results.json" },
     { "source": "/api/exemplars", "destination": "/assets/exemplars.json" },
-    { "source": "/dashboard", "destination": "/dashboard/index.html" },
-    { "source": "/", "destination": "/dashboard/index.html" }
+    { "source": "/dashboard", "destination": "/index.html" },
+    { "source": "/", "destination": "/index.html" }
   ]
 }
