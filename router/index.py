@@ -92,11 +92,20 @@ class ExemplarIndex:
                 f.write(json.dumps(r) + "\n")
         tmp.replace(config.EXEMPLARS_PATH)
 
-    def add(self, text: str, label: str, source: str, embedding: list[float], persist: bool = True):
+    def add(
+        self,
+        text: str,
+        label: str,
+        source: str,
+        embedding: list[float],
+        persist: bool = True,
+        category: str = "general",
+    ):
         row = {
             "text": text,
             "label": label,
             "source": source,
+            "category": category,
             "ts": datetime.now(timezone.utc).isoformat(),
         }
         v = _norm(np.array(embedding, dtype=np.float32).reshape(1, -1))
@@ -116,21 +125,25 @@ class ExemplarIndex:
         cost_weight: float | None = None,
         text: str | None = None,
         confidence_margin_threshold: float | None = None,
-    ) -> tuple[str, float]:
-        """Returns (label, margin). Margin = share of top class among k
-        neighbours. Empty index -> ('reasoning', 0.0) as the safe default.
+        return_category: bool = False,
+    ) -> tuple[str, float] | tuple[str, float, str]:
+        """Returns (label, margin) or (label, margin, category) if return_category=True.
+        Margin = share of top class among k neighbours. Empty index -> ('reasoning', 0.0).
         cost_weight (lambda in [0, 1]) shifts borderline decisions toward 'simple'.
         Uses similarity-weighted voting with near-duplicate short-circuiting
         and confidence-gated guardrails on borderline decisions."""
         cache_key = text.strip() if text else None
         if cache_key and cache_key in self._cache:
-            return self._cache[cache_key]
+            entry = self._cache[cache_key]
+            lbl, mgn = entry[0], entry[1]
+            cat = entry[2] if len(entry) > 2 else "general"
+            return (lbl, mgn, cat) if return_category else (lbl, mgn)
 
         margin_thresh = DEFAULT_MARGIN if confidence_margin_threshold is None else confidence_margin_threshold
 
         with self.lock:
             if self.vecs is None or len(self.meta) == 0:
-                return "reasoning", 0.0
+                return ("reasoning", 0.0, "general") if return_category else ("reasoning", 0.0)
             q = _norm(np.array(embedding, dtype=np.float32))
             sims = self.vecs @ q
 
@@ -139,9 +152,10 @@ class ExemplarIndex:
             if float(sims[max_idx]) >= NEAR_DUP_CUTOFF:
                 label = self.meta[max_idx]["label"]
                 margin = float(sims[max_idx])
+                category = self.meta[max_idx].get("category", "general")
                 if cache_key and len(self._cache) < self._max_cache_size:
-                    self._cache[cache_key] = (label, margin)
-                return label, margin
+                    self._cache[cache_key] = (label, margin, category)
+                return (label, margin, category) if return_category else (label, margin)
 
             k = min(K, len(self.meta))
             top = np.argpartition(-sims, k - 1)[:k]
@@ -149,15 +163,20 @@ class ExemplarIndex:
             lam = config.COST_WEIGHT if cost_weight is None else cost_weight
             s_w = 0.0
             r_w = 0.0
+            cat_weights: dict[str, float] = {}
             for i in top:
                 lbl = self.meta[i]["label"]
+                cat = self.meta[i].get("category", "general")
                 sim = max(0.0, float(sims[i]))
                 sim_weight = (sim ** SIM_EXPONENT) if sim > 0 else 1e-4
+                cat_weights[cat] = cat_weights.get(cat, 0.0) + sim_weight
                 weight = sim_weight * ((1.0 - lam) if lbl == "reasoning" else (1.0 + lam))
                 if lbl == "simple":
                     s_w += weight
                 else:
                     r_w += weight
+
+            top_category = max(cat_weights.items(), key=lambda x: x[1])[0] if cat_weights else "general"
 
             tot_w = s_w + r_w
             if tot_w == 0:
@@ -169,9 +188,9 @@ class ExemplarIndex:
                 label = "reasoning" if margin < margin_thresh else raw_label
 
             if cache_key and len(self._cache) < self._max_cache_size:
-                self._cache[cache_key] = (label, margin)
+                self._cache[cache_key] = (label, margin, top_category)
 
-            return label, margin
+            return (label, margin, top_category) if return_category else (label, margin)
 
     def nearest(self, embedding: list[float], top_n: int = 5) -> list[dict]:
         """Returns top_n nearest exemplar records with cosine similarity."""

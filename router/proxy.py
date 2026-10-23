@@ -90,9 +90,14 @@ def _wrap(content: str) -> dict:
     }
 
 
-async def dispatch(route: str, body: dict, text: str) -> tuple[dict, str, str]:
+async def dispatch(
+    route: str,
+    body: dict,
+    text: str,
+    model_override: str | None = None,
+) -> tuple[dict, str, str]:
     """Forward to the target backend. Returns (response_json, model, backend)."""
-    model = config.MODEL_FOR_ROUTE[route]
+    model = model_override or config.MODEL_FOR_ROUTE[route]
     backend = config.BACKEND_FOR_ROUTE[route]
     if route == "imagegen":
         # Sync native API (this key rejects async on the image endpoint)
@@ -124,12 +129,25 @@ async def dispatch(route: str, body: dict, text: str) -> tuple[dict, str, str]:
         return _wrap(f"Route '{route}' is not supported under local provider mode."), model, backend
     if backend == "ollama":
         out_body = {**body, "model": model, "stream": False}
-        r = await http_client.post(
-            f"{config.OLLAMA_BASE_URL}/v1/chat/completions",
-            json=out_body,
-        )
-        r.raise_for_status()
-        return r.json(), model, backend
+        try:
+            r = await http_client.post(
+                f"{config.OLLAMA_BASE_URL}/v1/chat/completions",
+                json=out_body,
+            )
+            r.raise_for_status()
+            return r.json(), model, backend
+        except httpx.HTTPStatusError as e:
+            # If a specialist model was requested but is not installed (404),
+            # gracefully fall back to the default small model (OLLAMA_MODEL)
+            if model != config.OLLAMA_MODEL and e.response.status_code == 404:
+                fallback_body = {**body, "model": config.OLLAMA_MODEL, "stream": False}
+                r_fb = await http_client.post(
+                    f"{config.OLLAMA_BASE_URL}/v1/chat/completions",
+                    json=fallback_body,
+                )
+                r_fb.raise_for_status()
+                return r_fb.json(), f"{config.OLLAMA_MODEL} (specialist fallback)", "ollama"
+            raise
     if backend == "gemini":
         if not config.GEMINI_API_KEY:
             # Fallback to local Ollama when GEMINI_API_KEY is unset in .env
@@ -212,12 +230,17 @@ async def chat_completions(request: Request):
     route = pre_route(text, has_image)
     margin = None
     embedding = None
+    category = "general"
     if route is None:
         embedding = (await asyncio.to_thread(get_client().embed, [text]))[0]
-        route, margin = get_index().route(embedding, text=text)
+        route, margin, category = get_index().route(embedding, text=text, return_category=True)
+
+    model_override = None
+    if route == "simple" and config.ENABLE_SPECIALISTS:
+        model_override = config.SPECIALIST_MODELS.get(category, config.OLLAMA_MODEL)
 
     try:
-        resp, model, backend = await dispatch(route, body, text)
+        resp, model, backend = await dispatch(route, body, text, model_override=model_override)
     except httpx.HTTPStatusError as e:
         return JSONResponse(status_code=502, content={
             "error": {"message": f"backend error for route {route}: {e.response.text[:300]}"}
@@ -236,7 +259,9 @@ async def chat_completions(request: Request):
     darwin = {
         "route": route,
         "margin": margin,
+        "category": category,
         "model": model,
+        "specialists_enabled": config.ENABLE_SPECIALISTS,
         "latency_ms": latency_ms,
         "cost_estimate": cost,
         "counterfactual_cost": cf_cost,
@@ -246,6 +271,7 @@ async def chat_completions(request: Request):
         "query_preview": text[:120],
         "route": route,
         "margin": margin,
+        "category": category,
         "backend": backend,
         "model": model,
         "latency_ms": latency_ms,
@@ -262,23 +288,37 @@ async def chat_completions(request: Request):
 
     return JSONResponse(
         content={**resp, "x_darwin": darwin},
-        headers={"x-darwin-route": route, "x-darwin-margin": str(margin)},
+        headers={
+            "x-darwin-route": route,
+            "x-darwin-margin": str(margin),
+            "x-darwin-category": category,
+            "x-darwin-model": model,
+        },
     )
 
 
 @app.post("/route")
 async def route_only(request: Request):
-    """Routing decision with nearest neighbors explanation."""
+    """Routing decision with nearest neighbors explanation and optional specialist recommendation."""
     body = await request.json()
     text = body.get("text", "")
     emb = (await asyncio.to_thread(get_client().embed, [text]))[0]
-    label, margin = get_index().route(emb, text=text)
+    label, margin, category = get_index().route(emb, text=text, return_category=True)
     neighbors = get_index().nearest(emb, top_n=5)
-    target_model = config.MODEL_FOR_ROUTE.get(label, config.OLLAMA_MODEL)
+    
+    specialist_model = config.SPECIALIST_MODELS.get(category, config.OLLAMA_MODEL)
+    if label == "simple" and config.ENABLE_SPECIALISTS:
+        target_model = specialist_model
+    else:
+        target_model = config.MODEL_FOR_ROUTE.get(label, config.OLLAMA_MODEL)
+
     return {
         "route": label,
         "margin": round(margin, 4),
+        "category": category,
         "target_model": target_model,
+        "specialists_enabled": config.ENABLE_SPECIALISTS,
+        "specialist_candidate": specialist_model,
         "neighbors": neighbors,
     }
 

@@ -3,7 +3,7 @@
 <div align="center">
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg?style=flat-square)](https://www.python.org/)
-[![Tests](https://img.shields.io/badge/tests-31%20passed-success.svg?style=flat-square)](tests/)
+[![Tests](https://img.shields.io/badge/tests-34%20passed-success.svg?style=flat-square)](tests/)
 [![Cost Reduction](https://img.shields.io/badge/cost%20saved-52.8%25-brightgreen.svg?style=flat-square)](assets/results.json)
 [![Accuracy Retention](https://img.shields.io/badge/acc%20retention-87.7%25-blueviolet.svg?style=flat-square)](assets/results.json)
 [![Proxy](https://img.shields.io/badge/OpenAI%20API-Compatible-orange.svg?style=flat-square)](router/proxy.py)
@@ -150,8 +150,8 @@ cp .env.example .env
 
 ### 2. Run Test Suite
 ```bash
-# Run all 31 unit tests (including split leakage and verifier assertions)
-python3 -m pytest tests/ -v
+# Run all 34 unit tests (including split leakage, verifiers, and specialist fallback)
+uv run pytest tests/ -v
 ```
 
 ### 3. Start the Router Proxy
@@ -167,7 +167,35 @@ curl -s http://localhost:8787/v1/chat/completions \
   -d '{"messages": [{"role": "user", "content": "Write a python function to compute the GCD using Euclidean algorithm."}]}'
 ```
 
-Every response contains `x_darwin` headers exposing routing classification, confidence margin, latency, and proxy cost.
+Every response contains `x_darwin` headers exposing routing classification, confidence margin, domain category, latency, and proxy cost.
+
+---
+
+## Optional: Mixture-of-Specialists (Domain-Specific Small Models)
+
+By default, Darwin Router uses `llama3.2:3b` as the single universal small model, keeping disk footprint small (~2.0 GB).
+
+However, you can optionally unlock **Mixture-of-Specialists (MoS)** routing: when a prompt is classified as `simple`, Darwin automatically inspects the domain of its closest exemplar neighbors (e.g., `code` vs `math`) and routes the prompt to an open-source domain specialist running locally:
+
+* **Coding tasks**: `qwen2.5-coder:7b`
+* **Math tasks**: `deepseek-math:7b`
+* **General / Creative tasks**: `llama3.2:3b`
+
+### How to Enable Specialists (Zero-Download Default):
+
+1. **Pull the specialists you want via Ollama CLI**:
+   ```bash
+   ollama pull qwen2.5-coder:7b
+   ollama pull deepseek-math:7b
+   ```
+
+2. **Enable in your `.env`**:
+   ```env
+   ENABLE_SPECIALISTS=true
+   ```
+
+### 🛡️ Graceful Degradation & Fail-Safe Fallback:
+If you enable specialists but haven't downloaded a specific model, Darwin Router **never crashes or returns errors**. When Ollama signals that the specialist model is missing (`404 Not Found`), Darwin catches it and seamlessly falls back to `llama3.2:3b` with zero user disruption.
 
 ---
 

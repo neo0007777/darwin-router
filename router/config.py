@@ -27,6 +27,14 @@ COST_LABEL = "Proxy Cost (not billed)"
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2:3b")
 
+# ── Optional Mixture-of-Specialists (Domain-routed small models) ───────────
+ENABLE_SPECIALISTS = os.getenv("ENABLE_SPECIALISTS", "false").lower() in ("true", "1", "yes")
+SPECIALIST_MODELS = {
+    "code": os.getenv("SPECIALIST_CODE_MODEL", "qwen2.5-coder:7b"),
+    "math": os.getenv("SPECIALIST_MATH_MODEL", "deepseek-math:7b"),
+    "general": OLLAMA_MODEL,
+}
+
 # ── Local embeddings ───────────────────────────────────────────────────────
 LOCAL_EMBED_MODEL = os.getenv("LOCAL_EMBED_MODEL", "all-MiniLM-L6-v2")
 
