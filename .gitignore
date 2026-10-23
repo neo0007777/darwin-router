@@ -1,7 +1,17 @@
 .env
 .venv/
 __pycache__/
-data/*
-!data/holdout.jsonl
-!data/holdout_v1.jsonl
+*.py[cod]
+.pytest_cache/
+.DS_Store
+*.log
+pipeline.log
 Alibaba-hackathon-apikey.csv
+
+# Runtime logs and download caches
+.*_cache.jsonl
+data/.*_cache.jsonl
+data/log.jsonl
+data/judge.jsonl
+data/replay.jsonl
+data/snapshots/

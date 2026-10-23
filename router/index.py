@@ -11,7 +11,28 @@ import numpy as np
 
 from router import config
 
-K = 7
+
+def load_frozen_params() -> dict:
+    frozen_file = config.ROOT / "config" / "frozen.json"
+    if frozen_file.exists():
+        try:
+            with open(frozen_file) as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {
+        "k": 7,
+        "sim_exponent": 1.0,
+        "margin_threshold": 0.15,
+        "near_duplicate_cutoff": 0.90,
+    }
+
+
+FROZEN_PARAMS = load_frozen_params()
+K = int(FROZEN_PARAMS.get("k", 7))
+SIM_EXPONENT = float(FROZEN_PARAMS.get("sim_exponent", 1.0))
+DEFAULT_MARGIN = float(FROZEN_PARAMS.get("margin_threshold", 0.15))
+NEAR_DUP_CUTOFF = float(FROZEN_PARAMS.get("near_duplicate_cutoff", 0.90))
 
 
 def _norm(v: np.ndarray) -> np.ndarray:
@@ -21,10 +42,12 @@ def _norm(v: np.ndarray) -> np.ndarray:
 
 
 class ExemplarIndex:
-    def __init__(self):
+    def __init__(self, max_cache_size: int = 2000):
         self.vecs: np.ndarray | None = None  # (n, d), L2-normalised
         self.meta: list[dict] = []
         self.lock = threading.Lock()
+        self._cache: dict[str, tuple[str, float]] = {}
+        self._max_cache_size = max_cache_size
 
     # -- persistence ---------------------------------------------------------
 
@@ -47,8 +70,19 @@ class ExemplarIndex:
                 r["embedding"] = v
             self._rewrite(rows)
         with self.lock:
-            self.meta = [{k: r[k] for k in ("text", "label", "source", "ts")} for r in rows]
+            self.meta = [
+                {
+                    "id": r.get("id", f"ex_{i}"),
+                    "text": r["text"],
+                    "label": r["label"],
+                    "source": r.get("source", "bootstrap"),
+                    "category": r.get("category", "general"),
+                    "ts": r.get("ts", datetime.now(timezone.utc).isoformat()),
+                }
+                for i, r in enumerate(rows)
+            ]
             self.vecs = _norm(np.array([r["embedding"] for r in rows], dtype=np.float32))
+            self._cache.clear()
         return len(rows)
 
     def _rewrite(self, rows: list[dict]):
@@ -69,27 +103,95 @@ class ExemplarIndex:
         with self.lock:
             self.meta.append(row)
             self.vecs = v if self.vecs is None else np.vstack([self.vecs, v])
+            self._cache.clear()
             if persist:
                 with open(config.EXEMPLARS_PATH, "a") as f:
                     f.write(json.dumps({**row, "embedding": embedding}) + "\n")
 
     # -- queries -------------------------------------------------------------
 
-    def route(self, embedding: list[float]) -> tuple[str, float]:
+    def route(
+        self,
+        embedding: list[float],
+        cost_weight: float | None = None,
+        text: str | None = None,
+        confidence_margin_threshold: float | None = None,
+    ) -> tuple[str, float]:
         """Returns (label, margin). Margin = share of top class among k
-        neighbours. Empty index -> ('reasoning', 0.0) as the safe default."""
+        neighbours. Empty index -> ('reasoning', 0.0) as the safe default.
+        cost_weight (lambda in [0, 1]) shifts borderline decisions toward 'simple'.
+        Uses similarity-weighted voting with near-duplicate short-circuiting
+        and confidence-gated guardrails on borderline decisions."""
+        cache_key = text.strip() if text else None
+        if cache_key and cache_key in self._cache:
+            return self._cache[cache_key]
+
+        margin_thresh = DEFAULT_MARGIN if confidence_margin_threshold is None else confidence_margin_threshold
+
         with self.lock:
             if self.vecs is None or len(self.meta) == 0:
                 return "reasoning", 0.0
             q = _norm(np.array(embedding, dtype=np.float32))
             sims = self.vecs @ q
+
+            # Near-duplicate short-circuit (cos >= NEAR_DUP_CUTOFF): directly match exemplar
+            max_idx = int(np.argmax(sims))
+            if float(sims[max_idx]) >= NEAR_DUP_CUTOFF:
+                label = self.meta[max_idx]["label"]
+                margin = float(sims[max_idx])
+                if cache_key and len(self._cache) < self._max_cache_size:
+                    self._cache[cache_key] = (label, margin)
+                return label, margin
+
             k = min(K, len(self.meta))
             top = np.argpartition(-sims, k - 1)[:k]
-            votes: dict[str, int] = {}
+            
+            lam = config.COST_WEIGHT if cost_weight is None else cost_weight
+            s_w = 0.0
+            r_w = 0.0
             for i in top:
-                votes[self.meta[i]["label"]] = votes.get(self.meta[i]["label"], 0) + 1
-            label = max(votes, key=votes.get)
-            return label, votes[label] / k
+                lbl = self.meta[i]["label"]
+                sim = max(0.0, float(sims[i]))
+                sim_weight = (sim ** SIM_EXPONENT) if sim > 0 else 1e-4
+                weight = sim_weight * ((1.0 - lam) if lbl == "reasoning" else (1.0 + lam))
+                if lbl == "simple":
+                    s_w += weight
+                else:
+                    r_w += weight
+
+            tot_w = s_w + r_w
+            if tot_w == 0:
+                label = "reasoning"
+                margin = 0.0
+            else:
+                margin = abs(s_w - r_w) / tot_w
+                raw_label = "simple" if s_w > r_w else "reasoning"
+                label = "reasoning" if margin < margin_thresh else raw_label
+
+            if cache_key and len(self._cache) < self._max_cache_size:
+                self._cache[cache_key] = (label, margin)
+
+            return label, margin
+
+    def nearest(self, embedding: list[float], top_n: int = 5) -> list[dict]:
+        """Returns top_n nearest exemplar records with cosine similarity."""
+        with self.lock:
+            if self.vecs is None or len(self.meta) == 0:
+                return []
+            q = _norm(np.array(embedding, dtype=np.float32))
+            sims = self.vecs @ q
+            n = min(top_n, len(self.meta))
+            top_indices = np.argsort(-sims)[:n]
+            return [
+                {
+                    "text": self.meta[i]["text"],
+                    "label": self.meta[i]["label"],
+                    "source": self.meta[i].get("source", "bootstrap"),
+                    "category": self.meta[i].get("category", "general"),
+                    "similarity": round(float(sims[i]), 4),
+                }
+                for i in top_indices
+            ]
 
     def max_sim(self, embedding: list[float], label: str) -> float:
         """Highest cosine vs existing exemplars of a route (judge dedup guard)."""

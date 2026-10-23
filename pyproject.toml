@@ -8,7 +8,15 @@ dependencies = [
     "httpx",
     "numpy",
     "python-dotenv",
+    "sentence-transformers",
+    "google-generativeai",
+    "matplotlib",
 ]
 
 [tool.uv]
 package = false
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]

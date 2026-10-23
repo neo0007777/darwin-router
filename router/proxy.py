@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 
 import httpx
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -41,6 +42,14 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"],
+)
 
 
 def extract_query(body: dict) -> tuple[str, bool]:
@@ -111,6 +120,69 @@ async def dispatch(route: str, body: dict, text: str) -> tuple[dict, str, str]:
         task_id = r.json()["output"]["task_id"]
         return _wrap(f"Video generation task submitted ({model}), task_id={task_id}. "
                      f"Poll {config.DASHSCOPE_NATIVE_BASE}/tasks/{task_id}"), model, backend
+    if backend == "disabled":
+        return _wrap(f"Route '{route}' is not supported under local provider mode."), model, backend
+    if backend == "ollama":
+        out_body = {**body, "model": model, "stream": False}
+        r = await http_client.post(
+            f"{config.OLLAMA_BASE_URL}/v1/chat/completions",
+            json=out_body,
+        )
+        r.raise_for_status()
+        return r.json(), model, backend
+    if backend == "gemini":
+        if not config.GEMINI_API_KEY:
+            # Fallback to local Ollama when GEMINI_API_KEY is unset in .env
+            out_body = {**body, "model": config.OLLAMA_MODEL, "stream": False}
+            r = await http_client.post(
+                f"{config.OLLAMA_BASE_URL}/v1/chat/completions",
+                json=out_body,
+            )
+            r.raise_for_status()
+            return r.json(), f"{config.OLLAMA_MODEL} (reasoning fallback)", "ollama"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={config.GEMINI_API_KEY}"
+        prompt_text = "\n".join(m.get("content", "") for m in body.get("messages", []))
+        payload = {
+            "contents": [{"parts": [{"text": prompt_text}]}],
+            "generationConfig": {"temperature": body.get("temperature", 0.0)},
+        }
+        try:
+            r = await http_client.post(url, json=payload, timeout=60.0)
+            r.raise_for_status()
+            res = r.json()
+            candidates = res.get("candidates", [])
+            parts = candidates[0].get("content", {}).get("parts", []) if candidates else []
+            content = "".join(p.get("text", "") for p in parts)
+            usage = res.get("usageMetadata", {})
+            in_tok = usage.get("promptTokenCount", 0)
+            out_tok = usage.get("candidatesTokenCount", 0)
+            resp_body = {
+                "id": f"chatcmpl-gemini-{int(time.time())}",
+                "object": "chat.completion",
+                "created": int(time.time()),
+                "model": model,
+                "choices": [{
+                    "index": 0,
+                    "message": {"role": "assistant", "content": content},
+                    "finish_reason": "stop"
+                }],
+                "usage": {
+                    "prompt_tokens": in_tok,
+                    "completion_tokens": out_tok,
+                    "total_tokens": in_tok + out_tok,
+                }
+            }
+            return resp_body, model, backend
+        except Exception:
+            # Resilient fallback to local model when upstream reasoning provider experiences demand spikes
+            out_body_local = {**body, "model": config.OLLAMA_MODEL, "stream": False}
+            r_local = await http_client.post(
+                f"{config.OLLAMA_BASE_URL}/v1/chat/completions",
+                json=out_body_local,
+                timeout=60.0,
+            )
+            r_local.raise_for_status()
+            return r_local.json(), f"{config.OLLAMA_MODEL} (upstream fallback)", "ollama"
     if backend == "sie":
         base_url, api_key = config.SIE_BASE_URL, config.SIE_API_KEY
     else:
@@ -142,7 +214,7 @@ async def chat_completions(request: Request):
     embedding = None
     if route is None:
         embedding = (await asyncio.to_thread(get_client().embed, [text]))[0]
-        route, margin = get_index().route(embedding)
+        route, margin = get_index().route(embedding, text=text)
 
     try:
         resp, model, backend = await dispatch(route, body, text)
@@ -196,12 +268,62 @@ async def chat_completions(request: Request):
 
 @app.post("/route")
 async def route_only(request: Request):
-    """Routing decision only — no dispatch, no logging, no judge. Used by
-    replay.py so eval traffic can never leak into the index."""
+    """Routing decision with nearest neighbors explanation."""
     body = await request.json()
-    emb = (await asyncio.to_thread(get_client().embed, [body["text"]]))[0]
-    label, margin = get_index().route(emb)
-    return {"route": label, "margin": margin}
+    text = body.get("text", "")
+    emb = (await asyncio.to_thread(get_client().embed, [text]))[0]
+    label, margin = get_index().route(emb, text=text)
+    neighbors = get_index().nearest(emb, top_n=5)
+    target_model = config.MODEL_FOR_ROUTE.get(label, config.OLLAMA_MODEL)
+    return {
+        "route": label,
+        "margin": round(margin, 4),
+        "target_model": target_model,
+        "neighbors": neighbors,
+    }
+
+
+@app.get("/api/benchmark")
+async def get_benchmark_results():
+    """Serves the latest empirical evaluation matrix results."""
+    results_path = config.ROOT / "assets" / "results.json"
+    if results_path.exists():
+        with open(results_path) as f:
+            data = json.load(f)
+            return data.get("policies", data)
+    old_path = config.ROOT / "assets" / "eval_matrix_results.json"
+    if old_path.exists():
+        with open(old_path) as f:
+            return json.load(f)
+    return {}
+
+
+@app.get("/api/exemplars")
+async def get_exemplars(limit: int = 300, category: str = None):
+    """Returns memory exemplars with metadata for the dashboard browser."""
+    idx = get_index()
+    meta = idx.meta
+    if category and category != "all":
+        meta = [m for m in meta if m.get("category") == category]
+    return {
+        "total": len(idx.meta),
+        "items": [
+            {
+                "text": m["text"],
+                "label": m["label"],
+                "source": m.get("source", "bootstrap"),
+                "category": m.get("category", "general"),
+            }
+            for m in meta[:limit]
+        ],
+    }
+
+
+@app.post("/api/probe/generate")
+async def generate_probe_api():
+    """Generates a parameter-randomized synthetic probe with computed ground truth."""
+    from router.prober import generate_probe
+    return generate_probe()
 
 
 @app.get("/stats")
@@ -260,4 +382,11 @@ async def healthz():
     return {"ok": True, "exemplars": len(get_index().meta)}
 
 
+@app.get("/dashboard")
+async def dashboard_redirect():
+    from starlette.responses import RedirectResponse
+    return RedirectResponse(url="/")
+
+
 app.mount("/", StaticFiles(directory=config.ROOT / "dashboard", html=True), name="dashboard")
+

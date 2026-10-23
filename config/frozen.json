@@ -1,0 +1,11 @@
+{
+  "k": 7,
+  "sim_exponent": 1.0,
+  "margin_threshold": 0.15,
+  "near_duplicate_cutoff": 0.9,
+  "dev_accuracy": 0.64,
+  "dev_mean_cost": 3.216205e-05,
+  "dev_cost_reduction": 0.51211407550676,
+  "dev_items_count": 100,
+  "frozen_timestamp": "2026-10-23T06:20:50Z"
+}

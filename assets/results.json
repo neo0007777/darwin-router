@@ -1,0 +1,258 @@
+{
+  "evaluation_timestamp": "2026-10-23T07:41:35Z",
+  "test_items_count": 300,
+  "clean_exemplars_count": 119,
+  "probed_exemplars_count": 129,
+  "frozen_hyperparameters": {
+    "k": 7,
+    "sim_exponent": 1.0,
+    "margin_threshold": 0.15,
+    "near_duplicate_cutoff": 0.9,
+    "dev_accuracy": 0.64,
+    "dev_mean_cost": 3.216205e-05,
+    "dev_cost_reduction": 0.51211407550676,
+    "dev_items_count": 100,
+    "frozen_timestamp": "2026-10-23T06:20:50Z"
+  },
+  "policies": {
+    "always-small": {
+      "accuracy_mean": 0.53,
+      "accuracy_ci": [
+        0.47333333333333333,
+        0.5866666666666667
+      ],
+      "cost_mean": 1.78112e-05,
+      "cost_ci": [
+        1.615248e-05,
+        1.9548006666666666e-05
+      ],
+      "cost_reduction_vs_big": 0.6945900992815378,
+      "accuracy_retention_vs_big": 0.75,
+      "route_label_match_acc": 0.53
+    },
+    "always-big": {
+      "accuracy_mean": 0.7066666666666667,
+      "accuracy_ci": [
+        0.6533333333333333,
+        0.7566666666666667
+      ],
+      "cost_mean": 5.8318999999999995e-05,
+      "cost_ci": [
+        5.0381493749999997e-05,
+        6.655304375e-05
+      ],
+      "cost_reduction_vs_big": 0.0,
+      "accuracy_retention_vs_big": 1.0,
+      "route_label_match_acc": 0.47
+    },
+    "category-rule": {
+      "accuracy_mean": 0.63,
+      "accuracy_ci": [
+        0.5733333333333334,
+        0.6833333333333333
+      ],
+      "cost_mean": 5.6378899999999996e-05,
+      "cost_ci": [
+        4.837430791666667e-05,
+        6.461817541666666e-05
+      ],
+      "cost_reduction_vs_big": 0.03326703132769764,
+      "accuracy_retention_vs_big": 0.8915094339622641,
+      "route_label_match_acc": 0.73
+    },
+    "static-knn": {
+      "accuracy_mean": 0.65,
+      "accuracy_ci": [
+        0.5966666666666667,
+        0.7033333333333334
+      ],
+      "cost_mean": 4.3298216666666675e-05,
+      "cost_ci": [
+        3.6394031249999995e-05,
+        5.057665458333333e-05
+      ],
+      "cost_reduction_vs_big": 0.2575624296255649,
+      "accuracy_retention_vs_big": 0.919811320754717,
+      "route_label_match_acc": 0.5533333333333333
+    },
+    "naive-knn": {
+      "accuracy_mean": 0.5966666666666667,
+      "accuracy_ci": [
+        0.54,
+        0.65
+      ],
+      "cost_mean": 2.1691716666666668e-05,
+      "cost_ci": [
+        1.887497125e-05,
+        2.4806938333333328e-05
+      ],
+      "cost_reduction_vs_big": 0.6280506067205085,
+      "accuracy_retention_vs_big": 0.8443396226415094,
+      "route_label_match_acc": 0.5233333333333333
+    },
+    "confidence-gated": {
+      "accuracy_mean": 0.7033333333333334,
+      "accuracy_ci": [
+        0.65,
+        0.7533333333333333
+      ],
+      "cost_mean": 5.7593783333333334e-05,
+      "cost_ci": [
+        4.9728538750000004e-05,
+        6.585763499999999e-05
+      ],
+      "cost_reduction_vs_big": 0.012435341255279774,
+      "accuracy_retention_vs_big": 0.9952830188679246,
+      "route_label_match_acc": 0.5033333333333333
+    },
+    "darwin-router": {
+      "accuracy_mean": 0.62,
+      "accuracy_ci": [
+        0.5633333333333334,
+        0.6766666666666666
+      ],
+      "cost_mean": 2.7501183333333337e-05,
+      "cost_ci": [
+        2.329609791666667e-05,
+        3.219261333333333e-05
+      ],
+      "cost_reduction_vs_big": 0.5284352726669981,
+      "accuracy_retention_vs_big": 0.8773584905660378,
+      "route_label_match_acc": 0.5466666666666666
+    },
+    "darwin-verifier-probed": {
+      "accuracy_mean": 0.6233333333333333,
+      "accuracy_ci": [
+        0.5666666666666667,
+        0.6766666666666666
+      ],
+      "cost_mean": 2.617018333333333e-05,
+      "cost_ci": [
+        2.2342245833333335e-05,
+        3.0413539166666664e-05
+      ],
+      "cost_reduction_vs_big": 0.5512580234000355,
+      "accuracy_retention_vs_big": 0.8820754716981132,
+      "route_label_match_acc": 0.5466666666666666
+    },
+    "oracle-router": {
+      "accuracy_mean": 0.7233333333333334,
+      "accuracy_ci": [
+        0.6733333333333333,
+        0.7733333333333333
+      ],
+      "cost_mean": 2.118153333333333e-05,
+      "cost_ci": [
+        1.8991825000000002e-05,
+        2.3432730416666666e-05
+      ],
+      "cost_reduction_vs_big": 0.6367987562658253,
+      "accuracy_retention_vs_big": 1.0235849056603774,
+      "route_label_match_acc": 1.0
+    }
+  },
+  "paired_differences": {
+    "darwin-router__vs__always-small": {
+      "policy_a": "darwin-router",
+      "policy_b": "always-small",
+      "mean_difference_pp": 9.0,
+      "ci_95": [
+        5.666666666666666,
+        12.666666666666668
+      ]
+    },
+    "darwin-router__vs__always-big": {
+      "policy_a": "darwin-router",
+      "policy_b": "always-big",
+      "mean_difference_pp": -8.666666666666668,
+      "ci_95": [
+        -12.333333333333334,
+        -5.0
+      ]
+    },
+    "darwin-router__vs__category-rule": {
+      "policy_a": "darwin-router",
+      "policy_b": "category-rule",
+      "mean_difference_pp": -1.0,
+      "ci_95": [
+        -4.333333333333334,
+        2.3333333333333335
+      ]
+    },
+    "darwin-router__vs__naive-knn": {
+      "policy_a": "darwin-router",
+      "policy_b": "naive-knn",
+      "mean_difference_pp": 2.3333333333333335,
+      "ci_95": [
+        0.6666666666666667,
+        4.333333333333334
+      ]
+    },
+    "darwin-verifier-probed__vs__darwin-router": {
+      "policy_a": "darwin-verifier-probed",
+      "policy_b": "darwin-router",
+      "mean_difference_pp": 0.33333333333333337,
+      "ci_95": [
+        0.0,
+        1.0
+      ]
+    }
+  },
+  "lambda_sweep": [
+    {
+      "lambda": 0.0,
+      "accuracy": 0.5833333333333334,
+      "cost": 2.1236066666666668e-05
+    },
+    {
+      "lambda": 0.1,
+      "accuracy": 0.5833333333333334,
+      "cost": 2.1029466666666666e-05
+    },
+    {
+      "lambda": 0.2,
+      "accuracy": 0.5833333333333334,
+      "cost": 1.9865533333333335e-05
+    },
+    {
+      "lambda": 0.30000000000000004,
+      "accuracy": 0.5733333333333334,
+      "cost": 1.908556666666667e-05
+    },
+    {
+      "lambda": 0.4,
+      "accuracy": 0.5566666666666666,
+      "cost": 1.9081983333333335e-05
+    },
+    {
+      "lambda": 0.5,
+      "accuracy": 0.5566666666666666,
+      "cost": 1.9081983333333335e-05
+    },
+    {
+      "lambda": 0.6000000000000001,
+      "accuracy": 0.5333333333333333,
+      "cost": 1.7773166666666668e-05
+    },
+    {
+      "lambda": 0.7000000000000001,
+      "accuracy": 0.53,
+      "cost": 1.7752866666666667e-05
+    },
+    {
+      "lambda": 0.8,
+      "accuracy": 0.53,
+      "cost": 1.78112e-05
+    },
+    {
+      "lambda": 0.9,
+      "accuracy": 0.53,
+      "cost": 1.78112e-05
+    },
+    {
+      "lambda": 1.0,
+      "accuracy": 0.53,
+      "cost": 1.78112e-05
+    }
+  ]
+}
