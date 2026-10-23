@@ -1,0 +1,9 @@
+{
+  "version": 2,
+  "rewrites": [
+    { "source": "/api/benchmark", "destination": "/assets/results.json" },
+    { "source": "/api/exemplars", "destination": "/assets/exemplars.json" },
+    { "source": "/dashboard", "destination": "/dashboard/index.html" },
+    { "source": "/", "destination": "/dashboard/index.html" }
+  ]
+}

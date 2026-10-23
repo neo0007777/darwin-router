@@ -1545,8 +1545,16 @@ async function runRouteOnly() {
     document.getElementById('responseStatus').innerText = 'Route Evaluated';
     document.getElementById('responseArea').innerText = `[ROUTING ONLY]\nDecision: ${data.route.toUpperCase()}\nConfidence Margin: ${(data.margin * 100).toFixed(1)}%\nTarget Model: ${data.target_model}\nkNN Evaluation Time: ${lat}ms\n\n(Click 'Run Full Completion' to query the actual model)`;
   } catch (err) {
-    console.error(err);
-    alert('Failed to connect to router: ' + err);
+    console.warn('Backend proxy not reachable, using client-side semantic simulation for demo:', err);
+    const isCodeOrMath = /(def |function|class|algorithm|\$|\%|\+|\*|\/|\bmath\b|\bcalculate\b|fibonacci|recursive)/i.test(text);
+    const simRoute = (isCodeOrMath && text.length > 70) ? 'reasoning' : 'simple';
+    const simModel = simRoute === 'simple' ? 'llama3.2:3b' : 'gemini-3.5-flash-lite';
+    const simMargin = 0.65;
+    const lat = Math.round(performance.now() - t0) + 12;
+
+    renderDecision(simRoute, simMargin, simModel, lat + 'ms', simRoute === 'simple' ? '$0.000018' : '$0.000058', simRoute === 'simple' ? '+69.5%' : '+0.0%', []);
+    document.getElementById('responseStatus').innerText = 'Route Evaluated (Static Showcase)';
+    document.getElementById('responseArea').innerText = `[STATIC SHOWCASE MODE]\nDecision: ${simRoute.toUpperCase()}\nTarget Model: ${simModel}\nConfidence Margin: ${(simMargin * 100).toFixed(1)}%\nkNN Lookup Latency: ${lat}ms\n\n(Note: Running in static showcase mode. To run live hardware inference with local Ollama, execute 'uv run uvicorn router.proxy:app --port 8787' locally!)`;
   } finally {
     btn.disabled = false;
     document.getElementById('tele-status').innerText = 'Done';
@@ -1653,8 +1661,20 @@ function renderDecision(route, margin, model, lat, cost, saved, neighbors) {
 // Load Benchmark Matrix Table
 async function loadBenchmarkMatrix() {
   try {
-    const res = await fetch('/api/benchmark');
-    const data = await res.json();
+    let data = null;
+    try {
+      const res = await fetch('/api/benchmark');
+      if (res.ok) data = await res.json();
+    } catch(e) {}
+
+    if (!data || !Object.keys(data).length) {
+      const resFallback = await fetch('/assets/results.json');
+      if (resFallback.ok) {
+        const full = await resFallback.json();
+        data = full.policies || full;
+      }
+    }
+
     const tbody = document.getElementById('matrixTableBody');
 
     const labels = {
@@ -1669,11 +1689,13 @@ async function loadBenchmarkMatrix() {
       "oracle-router": "Oracle Router (Upper Bound)"
     };
 
-    if (Object.keys(data).length) {
-      let rows = '';
-      const bigCost = data['always-big'] ? data['always-big'].cost_mean : 5.83e-05;
+    const policies = (data && data.policies) ? data.policies : (data || {});
 
-      for (const [key, d] of Object.entries(data)) {
+    if (Object.keys(policies).length) {
+      let rows = '';
+      const bigCost = policies['always-big'] ? policies['always-big'].cost_mean : 5.83e-05;
+
+      for (const [key, d] of Object.entries(policies)) {
         const isOurs = key.includes('darwin');
         const acc = (d.accuracy_mean * 100).toFixed(1) + '% [' + (d.accuracy_ci[0]*100).toFixed(1) + '–' + (d.accuracy_ci[1]*100).toFixed(1) + '%]';
         const cost = '$' + Number(d.cost_mean).toFixed(6);
@@ -1761,14 +1783,24 @@ function updateCalculator(volume) {
 // Memory Explorer
 async function loadMemory() {
   try {
-    const res = await fetch('/api/exemplars?limit=300');
+    let res = await fetch('/api/exemplars?limit=300');
+    if (!res.ok) res = await fetch('/assets/exemplars.json');
     const data = await res.json();
     allExemplars = data.items || [];
     document.getElementById('memoryTotalCount').innerText = data.total || allExemplars.length;
     document.getElementById('tab-ex-count').innerText = data.total || allExemplars.length;
     filterMemory();
   } catch (err) {
-    console.error('Failed to load memory exemplars:', err);
+    try {
+      const resFallback = await fetch('/assets/exemplars.json');
+      const data = await resFallback.json();
+      allExemplars = data.items || [];
+      document.getElementById('memoryTotalCount').innerText = data.total || allExemplars.length;
+      document.getElementById('tab-ex-count').innerText = data.total || allExemplars.length;
+      filterMemory();
+    } catch(e) {
+      console.error('Failed to load memory exemplars:', err);
+    }
   }
 }
 
